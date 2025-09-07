@@ -6,22 +6,29 @@
 gcc tarefa9.c -o tarefa9 -fopenmp
 time ./tarefa9
 
-0. Sequencial
+1. Sequencial
 Execution time: 0.741949 seconds
 
 real	0m0.744s
 user	0m0.737s
 sys	0m0.006s
 
+2. Paralelo sem escalonamento
+Execution time: 0.397728 seconds
 
-1. static
+real    0m0.402s
+user    0m0.765s
+sys     0m0.008s
+
+
+3. static
 Execution time: 0.397152 seconds
 
 real	0m0.399s
 user	0m0.783s
 sys	0m0.008s
 
-2. guided
+4. guided
 
 Execution time: 0.370393 seconds
 
@@ -30,7 +37,7 @@ user	0m0.523s
 sys	0m0.175s
 
 
-3. auto
+5. auto
 Execution time: 0.376036 seconds
 
 real	0m0.380s
@@ -62,7 +69,7 @@ int main(int argc, char *argv[])
    start_time = omp_get_wtime();
    
    // Silly sort parallel implementation
-   #pragma omp parallel for private(i, j) num_threads(2) schedule(auto)
+   #pragma omp parallel for private(i, j) num_threads(2) //schedule(static)
    for(i = 0; i < n; i++) {
       int count = 0;
       for(j = 0; j < n; j++) {

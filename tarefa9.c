@@ -34,8 +34,7 @@ int main(int argc, char *argv[])
       pos[i] = count;
    }
 
-   // Move elements to final position (parallel version)
-   #pragma omp parallel for num_threads(2) schedule(static)
+   // Move elements to final position (sequential to avoid race conditions)
    for(i = 0; i < n; i++) {
       out[pos[i]] = in[i];
    }

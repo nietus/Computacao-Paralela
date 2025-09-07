@@ -1,0 +1,26 @@
+# Executables
+*.exe
+
+# WSL specific
+.wsl*
+wsl*
+.vscode-server/
+
+# Build outputs
+*.o
+*.out
+*.so
+*.a
+
+# IDE specific
+.vs/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# System Files
+.DS_Store
+Thumbs.db

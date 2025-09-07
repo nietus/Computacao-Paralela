@@ -6,7 +6,51 @@ Resultado Sequencial: 5761455
 Resultado Paralelo: 5761455
 Resultado Paralelo com Reducao: 5761455
 
+gcc -fopenmp -O3 -o sieve tarefa10.c -lm
+valgrind --tool=callgrind --branch-sim=yes --cache-sim=yes   --callgrind-out-file=callgrind.out ./sieve 1 > /dev/null 2>&1
 
+SEQUENCIAL
+# callgrind format
+version: 1
+creator: callgrind-3.22.0
+pid: 20520
+cmd:  ./sieve 1
+part: 1
+
+
+desc: I1 cache: 65536 B, 64 B, 2-way associative
+desc: D1 cache: 65536 B, 64 B, 2-way associative
+desc: LL cache: 262144 B, 64 B, 8-way associative
+
+desc: Timerange: Basic block 0 - 448377010
+desc: Trigger: Program termination
+
+positions: line
+events: Ir Dr Dw I1mr D1mr D1mw ILmr DLmr DLmw Bc Bcm Bi Bim
+summary: 1593524482 100070282 348326590 1726 1565783 106606740 1699 1565377 106606624 448371161 7873 698 317
+
+gcc -fopenmp -O3 -o sieve tarefa10.c -lm
+valgrind --tool=callgrind --branch-sim=yes --cache-sim=yes   --callgrind-out-file=callgrind.out ./sieve 2 > /dev/null 2>&1
+
+PARALELO
+# callgrind format
+version: 1
+creator: callgrind-3.22.0
+pid: 20665
+cmd:  ./sieve 2
+part: 1
+
+
+desc: I1 cache: 65536 B, 64 B, 2-way associative
+desc: D1 cache: 65536 B, 64 B, 2-way associative
+desc: LL cache: 262144 B, 64 B, 8-way associative
+
+desc: Timerange: Basic block 0 - 460122478
+desc: Trigger: Program termination
+
+positions: line
+events: Ir Dr Dw I1mr D1mr D1mw ILmr DLmr DLmw Bc Bcm Bi Bim
+summary: 1611665038 106006769 342647966 1986 1617767 100880768 1958 1601071 100865086 454288572 22653 15519 348
 */
 
 #include <stdio.h>

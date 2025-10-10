@@ -24,3 +24,7 @@ wsl*
 # System Files
 .DS_Store
 Thumbs.db
+
+# Nsight Compute
+*.ncu
+*.ncu.log

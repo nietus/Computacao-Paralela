@@ -150,5 +150,9 @@ int main(void)
     printf("Resultado Paralelo: %d\n", primes_par);
     printf("Resultado GPU: %d\n", primes_gpu);
 
+    if (primes_seq != primes_par || primes_seq != primes_gpu) {
+        fprintf(stderr, "Erro: Os resultados das três implementações não coincidem!\n");
+        return 1;
+    }
     return 0;
 }

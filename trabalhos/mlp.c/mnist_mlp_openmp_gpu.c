@@ -8,10 +8,10 @@
 #include <omp.h>
 
 #define NUM_INPUTS 784       // 28x28 pixels
-#define NUM_HIDDEN 128       // Number of hidden neurons
+#define NUM_HIDDEN 512       // Number of hidden neurons
 #define NUM_OUTPUTS 10       // Digits 0-9
-#define TRAIN_SAMPLES 20000 //60000  // Number of training samples
-#define TEST_SAMPLES 5000 // 10000   // Number of test samples
+#define TRAIN_SAMPLES 60000  // Number of training samples
+#define TEST_SAMPLES 10000   // Number of test samples
 #define LEARNING_RATE 0.01   // Learning rate
 #define EPOCHS 10            // Number of training epochs
 #define BATCH_SIZE 64        // Mini-batch size
@@ -49,7 +49,7 @@ double relu_derivative(double x);
 void softmax(double inputs[], int size, double outputs[]);
 
 // Neural network prototypes
-void forward(NeuralNetwork *nn, double **inputs, int idx, double hidden_outputs[128], double output_outputs[10]);
+void forward(NeuralNetwork *nn, double **inputs, int idx, double hidden_outputs[NUM_HIDDEN], double output_outputs[NUM_OUTPUTS]);
 void backward(NeuralNetwork *nn, double inputs[], double hidden_outputs[], double output_outputs[], double expected_outputs[], double delta_hidden[], double delta_output[]);
 double cross_entropy_loss(double predicted[], double expected[], int num_outputs);
 void update_weights_biases(LinearLayer *layer, double inputs[], double deltas[]);
@@ -237,7 +237,7 @@ void linear_layer_forward(LinearLayer *layer, double inputs[], double outputs[])
     }
 }
 
-void forward(NeuralNetwork *nn, double **inputs, int idx, double hidden_outputs[128], double output_outputs[10])
+void forward(NeuralNetwork *nn, double **inputs, int idx, double hidden_outputs[NUM_HIDDEN], double output_outputs[NUM_OUTPUTS])
 {
     // defines the network forward pass
     linear_layer_forward(&nn->hidden_layer, inputs[idx], hidden_outputs);

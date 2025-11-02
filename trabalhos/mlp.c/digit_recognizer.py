@@ -9,6 +9,8 @@ import tkinter as tk
 from tkinter import ttk
 from PIL import Image, ImageDraw
 import struct
+import sys
+import os
 
 
 class MNISTModel:
@@ -235,13 +237,46 @@ class DigitRecognizerApp:
 
 def main():
     """Main function"""
+    # Determine which model file to load
+    model_files = {
+        'serial': 'mnist_model.bin',
+        'cpu': 'mnist_model_cpu.bin',
+        'gpu': 'mnist_model_gpu.bin',
+        'cuda': 'mnist_model_gpu.bin'  # CUDA uses same file as GPU
+    }
+
+    # Check command line arguments
+    if len(sys.argv) > 1:
+        model_type = sys.argv[1].lower()
+        if model_type not in model_files:
+            print(f"Usage: {sys.argv[0]} [serial|cpu|gpu|cuda]")
+            print("Default: Tries to find any available model")
+            return
+        model_file = model_files[model_type]
+    else:
+        # Try to find any available model
+        model_file = None
+        for mtype, mfile in model_files.items():
+            if os.path.exists(mfile):
+                model_file = mfile
+                print(f"Found {mtype} model: {mfile}")
+                break
+
+        if model_file is None:
+            print("Error: No trained model found!")
+            print("Available models to train:")
+            print("  - mnist_model.bin (serial version)")
+            print("  - mnist_model_cpu.bin (OpenMP CPU version)")
+            print("  - mnist_model_gpu.bin (OpenMP GPU/CUDA version)")
+            print("\nPlease train a model first using one of the C/CUDA programs.")
+            return
+
     # Load the model
     model = MNISTModel()
-
     try:
-        model.load_model('mnist_model.bin')
+        model.load_model(model_file)
     except FileNotFoundError:
-        print("Error: mnist_model.bin not found!")
+        print(f"Error: {model_file} not found!")
         print("Please train the model first using the C program.")
         return
 

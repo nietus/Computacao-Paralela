@@ -39,6 +39,7 @@ void initialize_layer(LinearLayer *layer, int input_size, int output_size, Activ
 void free_layer(LinearLayer *layer);
 void initialize_network(NeuralNetwork *nn);
 void free_network(NeuralNetwork *nn);
+void save_model(NeuralNetwork *nn, const char *filename);
 void linear_layer_forward(LinearLayer *layer, double inputs[], double outputs[]);
 
 // Activation function prototypes
@@ -96,6 +97,10 @@ int main() {
     // Test the neural network
     printf("Testing neural network...\n");
     test(&nn, test_images, test_labels, TEST_SAMPLES);
+
+    // Save the trained model
+    printf("Saving model...\n");
+    save_model(&nn, "mnist_model_cpu.bin");
 
     // Free training data
     for (int i = 0; i < TRAIN_SAMPLES; i++) {
@@ -207,6 +212,39 @@ void initialize_network(NeuralNetwork *nn) {
 void free_network(NeuralNetwork *nn) {
     free_layer(&nn->hidden_layer);
     free_layer(&nn->output_layer);
+}
+
+// Save model weights to file
+void save_model(NeuralNetwork *nn, const char *filename) {
+    FILE *fp = fopen(filename, "wb");
+    if (!fp) {
+        printf("Could not open file %s for writing model\n", filename);
+        exit(1);
+    }
+
+    // Write layer dimensions
+    fwrite(&nn->hidden_layer.input_size, sizeof(int), 1, fp);
+    fwrite(&nn->hidden_layer.output_size, sizeof(int), 1, fp);
+    fwrite(&nn->output_layer.output_size, sizeof(int), 1, fp);
+
+    // Write hidden layer weights
+    for (int i = 0; i < nn->hidden_layer.input_size; i++) {
+        fwrite(nn->hidden_layer.weights[i], sizeof(double), nn->hidden_layer.output_size, fp);
+    }
+
+    // Write hidden layer biases
+    fwrite(nn->hidden_layer.biases, sizeof(double), nn->hidden_layer.output_size, fp);
+
+    // Write output layer weights
+    for (int i = 0; i < nn->output_layer.input_size; i++) {
+        fwrite(nn->output_layer.weights[i], sizeof(double), nn->output_layer.output_size, fp);
+    }
+
+    // Write output layer biases
+    fwrite(nn->output_layer.biases, sizeof(double), nn->output_layer.output_size, fp);
+
+    fclose(fp);
+    printf("Model saved to %s\n", filename);
 }
 
 // Forward propagation for a single layer

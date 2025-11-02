@@ -10,10 +10,10 @@
 #define NUM_INPUTS 784       // 28x28 pixels
 #define NUM_HIDDEN 128       // Number of hidden neurons
 #define NUM_OUTPUTS 10       // Digits 0-9
-#define TRAIN_SAMPLES 20000 //60000  // Number of training samples
-#define TEST_SAMPLES 5000 // 10000   // Number of test samples
+#define TRAIN_SAMPLES 60000 //60000  // Number of training samples
+#define TEST_SAMPLES 10000 // 10000   // Number of test samples
 #define LEARNING_RATE 0.01   // Learning rate
-#define EPOCHS 10            // Number of training epochs
+#define EPOCHS 30            // Number of training epochs
 #define BATCH_SIZE 64        // Mini-batch size
 
 #define CUDA_CHECK(call) \
@@ -128,6 +128,7 @@ void initialize_layer(LinearLayer *layer, int input_size, int output_size, Activ
 void free_layer(LinearLayer *layer);
 void initialize_network(NeuralNetwork *nn);
 void free_network(NeuralNetwork *nn);
+void save_model(NeuralNetwork *nn, const char *filename);
 void forward_gpu(NeuralNetwork *nn, double *input, double *hidden_out, double *output_out);
 void backward_gpu(NeuralNetwork *nn, double *input, double *hidden_outputs, double *output_outputs, double *expected);
 void train(NeuralNetwork *nn, double **inputs, int *labels, int num_samples);
@@ -184,6 +185,10 @@ int main() {
     clock_t test_end = clock();
     double test_time = (double)(test_end - test_start) / CLOCKS_PER_SEC;
     printf("Testing time: %.2f seconds\n", test_time);
+
+    // Save the trained model
+    printf("Saving model...\n");
+    save_model(&nn, "mnist_model_gpu.bin");
 
     // Free training data
     for (int i = 0; i < TRAIN_SAMPLES; i++) {
@@ -269,6 +274,55 @@ void free_network(NeuralNetwork *nn) {
     cudaFree(nn->d_delta_output);
     cudaFree(nn->d_expected_output);
     cudaFree(nn->d_input);
+}
+
+// Save model weights to file
+void save_model(NeuralNetwork *nn, const char *filename) {
+    // First, copy weights back from GPU to CPU
+    CUDA_CHECK(cudaMemcpy(nn->hidden_layer.weights, nn->hidden_layer.d_weights,
+                          nn->hidden_layer.input_size * nn->hidden_layer.output_size * sizeof(double),
+                          cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(nn->hidden_layer.biases, nn->hidden_layer.d_biases,
+                          nn->hidden_layer.output_size * sizeof(double),
+                          cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(nn->output_layer.weights, nn->output_layer.d_weights,
+                          nn->output_layer.input_size * nn->output_layer.output_size * sizeof(double),
+                          cudaMemcpyDeviceToHost));
+    CUDA_CHECK(cudaMemcpy(nn->output_layer.biases, nn->output_layer.d_biases,
+                          nn->output_layer.output_size * sizeof(double),
+                          cudaMemcpyDeviceToHost));
+
+    FILE *fp = fopen(filename, "wb");
+    if (!fp) {
+        printf("Could not open file %s for writing model\n", filename);
+        exit(1);
+    }
+
+    // Write layer dimensions
+    fwrite(&nn->hidden_layer.input_size, sizeof(int), 1, fp);
+    fwrite(&nn->hidden_layer.output_size, sizeof(int), 1, fp);
+    fwrite(&nn->output_layer.output_size, sizeof(int), 1, fp);
+
+    // Write hidden layer weights (flattened array is stored row-major, same as expected)
+    for (int i = 0; i < nn->hidden_layer.input_size; i++) {
+        fwrite(&nn->hidden_layer.weights[i * nn->hidden_layer.output_size],
+               sizeof(double), nn->hidden_layer.output_size, fp);
+    }
+
+    // Write hidden layer biases
+    fwrite(nn->hidden_layer.biases, sizeof(double), nn->hidden_layer.output_size, fp);
+
+    // Write output layer weights
+    for (int i = 0; i < nn->output_layer.input_size; i++) {
+        fwrite(&nn->output_layer.weights[i * nn->output_layer.output_size],
+               sizeof(double), nn->output_layer.output_size, fp);
+    }
+
+    // Write output layer biases
+    fwrite(nn->output_layer.biases, sizeof(double), nn->output_layer.output_size, fp);
+
+    fclose(fp);
+    printf("Model saved to %s\n", filename);
 }
 
 void softmax(double inputs[], int size, double outputs[]) {

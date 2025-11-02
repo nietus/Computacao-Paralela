@@ -7,3 +7,5 @@ nvcc -O3 -o mnist_mlp_cuda mnist_mlp_cuda.cu
 ./mnist_mlp_openmp_cpu   # OpenMP CPU
 ./mnist_mlp_openmp_gpu   # OpenMP GPU
 ./mnist_mlp_cuda         # CUDA
+
+python digit_recognizer.py gpu

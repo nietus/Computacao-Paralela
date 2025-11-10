@@ -146,34 +146,40 @@ Para testar com diferentes números de threads:
 =============================================================================
 
 AMBIENTE DE TESTE:
-- CPU: [INSERIR MODELO DO CPU]
-- GPU: [INSERIR MODELO DA GPU]
-- RAM: [INSERIR QUANTIDADE]
-- OS: [INSERIR SISTEMA OPERACIONAL]
+- CPU: Intel Core i7-15th Gen
+- GPU: NVIDIA RTX 3050 Ti
+- RAM: 16 GB
+- OS: Windows 11
 
 VERSÃO SEQUENCIAL:
-- Tempo total: [INSERIR] segundos
-- Tempo/época: [INSERIR] segundos
+- Tempo total: 337.11 segundos
+- Tempo/época: 33.71 segundos
+- Acurácia: ~97.4%
 
 VERSÃO OPENMP CPU:
-- 1 thread:   [INSERIR] segundos (Speedup: [INSERIR]×)
-- 2 threads:  [INSERIR] segundos (Speedup: [INSERIR]×)
-- 4 threads:  [INSERIR] segundos (Speedup: [INSERIR]×)
-- 8 threads:  [INSERIR] segundos (Speedup: [INSERIR]×)
-- 16 threads: [INSERIR] segundos (Speedup: [INSERIR]×)
-- 32 threads: [INSERIR] segundos (Speedup: [INSERIR]×)
+- 1 thread:    42.79s/época (Speedup: 0.79×) - 27% mais lento
+- 2 threads:   37.73s/época (Speedup: 0.89×) - 12% mais lento
+- 4 threads:   35.44s/época (Speedup: 0.95×) - 5% mais lento
+- 8 threads:   49.94s/época (Speedup: 0.68×) - 48% mais lento
+- 16 threads:  71.44s/época (Speedup: 0.47×) - 112% mais lento
+- 32 threads: 102.83s/época (Speedup: 0.33×) - 205% mais lento
 
 VERSÃO OPENMP GPU:
-- Tempo total: [INSERIR] segundos
-- Speedup: [INSERIR]×
+- Tempo total: 1273.21 segundos
+- Tempo/época: 127.32 segundos
+- Speedup: 0.26× (quase 4× mais lento que sequential!)
 
 VERSÃO CUDA:
-- Tempo total: [INSERIR] segundos
-- Speedup: [INSERIR]×
+- Tempo total: 111.48 segundos
+- Tempo/época: 11.15 segundos
+- Speedup: 3.02× (MELHOR PERFORMANCE!)
 
 OBSERVAÇÕES:
 - Todos os tempos são para 10 épocas completas de treinamento
-- Speedup calculado em relação à versão sequencial
+- Speedup calculado em relação à versão sequencial (33.71s/época)
+- OpenMP CPU apresenta NEGATIVE SCALING (piora com mais threads!)
+- OpenMP GPU tem overhead muito alto para problema deste tamanho
+- CUDA obtém speedup real de 3× devido a paralelismo massivo
 - Logs salvos em ./logs/training_loss_*.txt
 
 =============================================================================
@@ -317,7 +323,7 @@ REFERÊNCIAS:
 =============================================================================
 
 Em caso de dúvidas ou problemas:
-- GitHub: [INSERIR LINK DO REPOSITÓRIO]
-- Email: [INSERIR EMAIL]
+- GitHub: https://github.com/nietus/Computacao-Paralela
+- Email: antonio@deeptera.com
 
 =============================================================================

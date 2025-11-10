@@ -64,73 +64,95 @@
 #include <string.h>
 #include <cuda_runtime.h>
 
-#define NUM_INPUTS 784       // 28x28 pixels
-#define NUM_HIDDEN 128       // Number of hidden neurons
-#define NUM_OUTPUTS 10       // Digits 0-9
-#define TRAIN_SAMPLES 60000 //60000  // Number of training samples
-#define TEST_SAMPLES 10000 // 10000   // Number of test samples
-#define LEARNING_RATE 0.01   // Learning rate
-#define EPOCHS 30            // Number of training epochs
-#define BATCH_SIZE 64        // Mini-batch size
+#define NUM_INPUTS 784      // 28x28 pixels
+#define NUM_HIDDEN 128      // Number of hidden neurons
+#define NUM_OUTPUTS 10      // Digits 0-9
+#define TRAIN_SAMPLES 60000 // 60000  // Number of training samples
+#define TEST_SAMPLES 10000  // 10000   // Number of test samples
+#define LEARNING_RATE 0.01  // Learning rate
+#define EPOCHS 30           // Number of training epochs
+#define BATCH_SIZE 64       // Mini-batch size
 
-#define CUDA_CHECK(call) \
-    do { \
-        cudaError_t err = call; \
-        if (err != cudaSuccess) { \
+#define CUDA_CHECK(call)                                                                      \
+    do                                                                                        \
+    {                                                                                         \
+        cudaError_t err = call;                                                               \
+        if (err != cudaSuccess)                                                               \
+        {                                                                                     \
             printf("CUDA error at %s:%d: %s\n", __FILE__, __LINE__, cudaGetErrorString(err)); \
-            exit(EXIT_FAILURE); \
-        } \
-    } while(0)
+            exit(EXIT_FAILURE);                                                               \
+        }                                                                                     \
+    } while (0)
 
 // Activation Types
-typedef enum { SIGMOID, RELU, SOFTMAX } ActivationType;
+typedef enum
+{
+    SIGMOID,
+    RELU,
+    SOFTMAX
+} ActivationType;
 
 // CUDA kernels
 __global__ void linear_forward_kernel(double *inputs, double *weights, double *biases, double *outputs,
-                                      int input_size, int output_size) {
+                                      int input_size, int output_size)
+{
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < output_size) {
+    if (i < output_size)
+    {
         double sum = biases[i];
-        for (int j = 0; j < input_size; j++) {
+        for (int j = 0; j < input_size; j++)
+        {
             sum += inputs[j] * weights[j * output_size + i];
         }
         outputs[i] = sum;
     }
 }
 
-__global__ void apply_relu_kernel(double *data, int size) {
+__global__ void apply_relu_kernel(double *data, int size)
+{
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < size) {
+    if (i < size)
+    {
         data[i] = data[i] > 0 ? data[i] : 0;
     }
 }
 
-__global__ void apply_sigmoid_kernel(double *data, int size) {
+__global__ void apply_sigmoid_kernel(double *data, int size)
+{
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < size) {
+    if (i < size)
+    {
         data[i] = 1.0 / (1.0 + exp(-data[i]));
     }
 }
 
-__global__ void output_delta_kernel(double *outputs, double *expected, double *delta, int size) {
+__global__ void output_delta_kernel(double *outputs, double *expected, double *delta, int size)
+{
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < size) {
+    if (i < size)
+    {
         delta[i] = outputs[i] - expected[i];
     }
 }
 
 __global__ void hidden_delta_kernel(double *delta_output, double *weights, double *hidden_outputs,
-                                     double *delta_hidden, int num_hidden, int num_outputs, int use_relu) {
+                                    double *delta_hidden, int num_hidden, int num_outputs, int use_relu)
+{
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < num_hidden) {
+    if (i < num_hidden)
+    {
         double error = 0.0;
-        for (int j = 0; j < num_outputs; j++) {
+        for (int j = 0; j < num_outputs; j++)
+        {
             error += delta_output[j] * weights[i * num_outputs + j];
         }
         double derivative;
-        if (use_relu) {
+        if (use_relu)
+        {
             derivative = hidden_outputs[i] > 0 ? 1.0 : 0.0;
-        } else {
+        }
+        else
+        {
             derivative = hidden_outputs[i] * (1.0 - hidden_outputs[i]);
         }
         delta_hidden[i] = error * derivative;
@@ -138,27 +160,32 @@ __global__ void hidden_delta_kernel(double *delta_output, double *weights, doubl
 }
 
 __global__ void update_weights_kernel(double *weights, double *inputs, double *deltas,
-                                       int input_size, int output_size, double lr) {
+                                      int input_size, int output_size, double lr)
+{
     int i = blockIdx.x * blockDim.x + threadIdx.x; // input index
     int j = blockIdx.y * blockDim.y + threadIdx.y; // output index
 
-    if (i < input_size && j < output_size) {
+    if (i < input_size && j < output_size)
+    {
         weights[i * output_size + j] -= lr * deltas[j] * inputs[i];
     }
 }
 
-__global__ void update_biases_kernel(double *biases, double *deltas, int size, double lr) {
+__global__ void update_biases_kernel(double *biases, double *deltas, int size, double lr)
+{
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    if (i < size) {
+    if (i < size)
+    {
         biases[i] -= lr * deltas[i];
     }
 }
 
 // CPU-side data structures
-typedef struct {
+typedef struct
+{
     int input_size;
     int output_size;
-    double *weights;      // Flattened: [input_size * output_size]
+    double *weights; // Flattened: [input_size * output_size]
     double *biases;
     ActivationType activation;
 
@@ -167,7 +194,8 @@ typedef struct {
     double *d_biases;
 } LinearLayer;
 
-typedef struct {
+typedef struct
+{
     LinearLayer hidden_layer;
     LinearLayer output_layer;
 
@@ -197,7 +225,8 @@ void read_mnist_images(const char *filename, double **images, int num_images);
 void read_mnist_labels(const char *filename, int *labels, int num_labels);
 int reverse_int(int i);
 
-int main() {
+int main()
+{
     clock_t program_start = clock();
 
     // Allocate memory for training data
@@ -248,14 +277,16 @@ int main() {
     save_model(&nn, "mnist_model_gpu.bin");
 
     // Free training data
-    for (int i = 0; i < TRAIN_SAMPLES; i++) {
+    for (int i = 0; i < TRAIN_SAMPLES; i++)
+    {
         free(train_images[i]);
     }
     free(train_images);
     free(train_labels);
 
     // Free test data
-    for (int i = 0; i < TEST_SAMPLES; i++) {
+    for (int i = 0; i < TEST_SAMPLES; i++)
+    {
         free(test_images[i]);
     }
     free(test_images);
@@ -276,7 +307,8 @@ int main() {
     return 0;
 }
 
-void initialize_layer(LinearLayer *layer, int input_size, int output_size, ActivationType activation) {
+void initialize_layer(LinearLayer *layer, int input_size, int output_size, ActivationType activation)
+{
     layer->input_size = input_size;
     layer->output_size = output_size;
     layer->activation = activation;
@@ -287,10 +319,12 @@ void initialize_layer(LinearLayer *layer, int input_size, int output_size, Activ
 
     // Xavier Initialization
     double limit = sqrt(6.0 / (input_size + output_size));
-    for (int i = 0; i < input_size * output_size; i++) {
+    for (int i = 0; i < input_size * output_size; i++)
+    {
         layer->weights[i] = ((double)rand() / RAND_MAX) * 2 * limit - limit;
     }
-    for (int i = 0; i < output_size; i++) {
+    for (int i = 0; i < output_size; i++)
+    {
         layer->biases[i] = 0.0;
     }
 
@@ -301,14 +335,16 @@ void initialize_layer(LinearLayer *layer, int input_size, int output_size, Activ
     CUDA_CHECK(cudaMemcpy(layer->d_biases, layer->biases, output_size * sizeof(double), cudaMemcpyHostToDevice));
 }
 
-void free_layer(LinearLayer *layer) {
+void free_layer(LinearLayer *layer)
+{
     free(layer->weights);
     free(layer->biases);
     cudaFree(layer->d_weights);
     cudaFree(layer->d_biases);
 }
 
-void initialize_network(NeuralNetwork *nn) {
+void initialize_network(NeuralNetwork *nn)
+{
     srand(time(NULL));
     initialize_layer(&nn->hidden_layer, NUM_INPUTS, NUM_HIDDEN, RELU);
     initialize_layer(&nn->output_layer, NUM_HIDDEN, NUM_OUTPUTS, SOFTMAX);
@@ -322,7 +358,8 @@ void initialize_network(NeuralNetwork *nn) {
     CUDA_CHECK(cudaMalloc(&nn->d_input, NUM_INPUTS * sizeof(double)));
 }
 
-void free_network(NeuralNetwork *nn) {
+void free_network(NeuralNetwork *nn)
+{
     free_layer(&nn->hidden_layer);
     free_layer(&nn->output_layer);
     cudaFree(nn->d_hidden_outputs);
@@ -334,7 +371,8 @@ void free_network(NeuralNetwork *nn) {
 }
 
 // Save model weights to file
-void save_model(NeuralNetwork *nn, const char *filename) {
+void save_model(NeuralNetwork *nn, const char *filename)
+{
     // First, copy weights back from GPU to CPU
     CUDA_CHECK(cudaMemcpy(nn->hidden_layer.weights, nn->hidden_layer.d_weights,
                           nn->hidden_layer.input_size * nn->hidden_layer.output_size * sizeof(double),
@@ -350,7 +388,8 @@ void save_model(NeuralNetwork *nn, const char *filename) {
                           cudaMemcpyDeviceToHost));
 
     FILE *fp = fopen(filename, "wb");
-    if (!fp) {
+    if (!fp)
+    {
         printf("Could not open file %s for writing model\n", filename);
         exit(1);
     }
@@ -361,7 +400,8 @@ void save_model(NeuralNetwork *nn, const char *filename) {
     fwrite(&nn->output_layer.output_size, sizeof(int), 1, fp);
 
     // Write hidden layer weights (flattened array is stored row-major, same as expected)
-    for (int i = 0; i < nn->hidden_layer.input_size; i++) {
+    for (int i = 0; i < nn->hidden_layer.input_size; i++)
+    {
         fwrite(&nn->hidden_layer.weights[i * nn->hidden_layer.output_size],
                sizeof(double), nn->hidden_layer.output_size, fp);
     }
@@ -370,7 +410,8 @@ void save_model(NeuralNetwork *nn, const char *filename) {
     fwrite(nn->hidden_layer.biases, sizeof(double), nn->hidden_layer.output_size, fp);
 
     // Write output layer weights
-    for (int i = 0; i < nn->output_layer.input_size; i++) {
+    for (int i = 0; i < nn->output_layer.input_size; i++)
+    {
         fwrite(&nn->output_layer.weights[i * nn->output_layer.output_size],
                sizeof(double), nn->output_layer.output_size, fp);
     }
@@ -382,24 +423,30 @@ void save_model(NeuralNetwork *nn, const char *filename) {
     printf("Model saved to %s\n", filename);
 }
 
-void softmax(double inputs[], int size, double outputs[]) {
+void softmax(double inputs[], int size, double outputs[])
+{
     double max = inputs[0];
-    for (int i = 1; i < size; i++) {
-        if (inputs[i] > max) max = inputs[i];
+    for (int i = 1; i < size; i++)
+    {
+        if (inputs[i] > max)
+            max = inputs[i];
     }
 
     double sum = 0.0;
-    for (int i = 0; i < size; i++) {
+    for (int i = 0; i < size; i++)
+    {
         outputs[i] = exp(inputs[i] - max);
         sum += outputs[i];
     }
 
-    for (int i = 0; i < size; i++) {
+    for (int i = 0; i < size; i++)
+    {
         outputs[i] /= sum;
     }
 }
 
-void forward_gpu(NeuralNetwork *nn, double *input, double *hidden_out, double *output_out) {
+void forward_gpu(NeuralNetwork *nn, double *input, double *hidden_out, double *output_out)
+{
     // Copy input to GPU
     CUDA_CHECK(cudaMemcpy(nn->d_input, input, NUM_INPUTS * sizeof(double), cudaMemcpyHostToDevice));
 
@@ -407,15 +454,15 @@ void forward_gpu(NeuralNetwork *nn, double *input, double *hidden_out, double *o
     int blockSize = 256;
     int numBlocks = (NUM_HIDDEN + blockSize - 1) / blockSize;
     linear_forward_kernel<<<numBlocks, blockSize>>>(nn->d_input, nn->hidden_layer.d_weights,
-                                                     nn->hidden_layer.d_biases, nn->d_hidden_outputs,
-                                                     NUM_INPUTS, NUM_HIDDEN);
+                                                    nn->hidden_layer.d_biases, nn->d_hidden_outputs,
+                                                    NUM_INPUTS, NUM_HIDDEN);
     apply_relu_kernel<<<numBlocks, blockSize>>>(nn->d_hidden_outputs, NUM_HIDDEN);
 
     // Output layer forward
     numBlocks = (NUM_OUTPUTS + blockSize - 1) / blockSize;
     linear_forward_kernel<<<numBlocks, blockSize>>>(nn->d_hidden_outputs, nn->output_layer.d_weights,
-                                                     nn->output_layer.d_biases, nn->d_output_outputs,
-                                                     NUM_HIDDEN, NUM_OUTPUTS);
+                                                    nn->output_layer.d_biases, nn->d_output_outputs,
+                                                    NUM_HIDDEN, NUM_OUTPUTS);
 
     // Copy outputs back to CPU for softmax
     CUDA_CHECK(cudaMemcpy(output_out, nn->d_output_outputs, NUM_OUTPUTS * sizeof(double), cudaMemcpyDeviceToHost));
@@ -426,7 +473,8 @@ void forward_gpu(NeuralNetwork *nn, double *input, double *hidden_out, double *o
     CUDA_CHECK(cudaMemcpy(hidden_out, nn->d_hidden_outputs, NUM_HIDDEN * sizeof(double), cudaMemcpyDeviceToHost));
 }
 
-void backward_gpu(NeuralNetwork *nn, double *input, double *hidden_outputs, double *output_outputs, double *expected) {
+void backward_gpu(NeuralNetwork *nn, double *input, double *hidden_outputs, double *output_outputs, double *expected)
+{
     // Copy expected output to GPU
     CUDA_CHECK(cudaMemcpy(nn->d_expected_output, expected, NUM_OUTPUTS * sizeof(double), cudaMemcpyHostToDevice));
 
@@ -434,59 +482,65 @@ void backward_gpu(NeuralNetwork *nn, double *input, double *hidden_outputs, doub
     int blockSize = 256;
     int numBlocks = (NUM_OUTPUTS + blockSize - 1) / blockSize;
     output_delta_kernel<<<numBlocks, blockSize>>>(nn->d_output_outputs, nn->d_expected_output,
-                                                   nn->d_delta_output, NUM_OUTPUTS);
+                                                  nn->d_delta_output, NUM_OUTPUTS);
 
     // Compute hidden delta
     numBlocks = (NUM_HIDDEN + blockSize - 1) / blockSize;
     hidden_delta_kernel<<<numBlocks, blockSize>>>(nn->d_delta_output, nn->output_layer.d_weights,
-                                                   nn->d_hidden_outputs, nn->d_delta_hidden,
-                                                   NUM_HIDDEN, NUM_OUTPUTS, 1); // 1 for RELU
+                                                  nn->d_hidden_outputs, nn->d_delta_hidden,
+                                                  NUM_HIDDEN, NUM_OUTPUTS, 1); // 1 for RELU
 
     // Update output layer weights
     dim3 blockDim(16, 16);
     dim3 gridDim((NUM_HIDDEN + blockDim.x - 1) / blockDim.x,
                  (NUM_OUTPUTS + blockDim.y - 1) / blockDim.y);
     update_weights_kernel<<<gridDim, blockDim>>>(nn->output_layer.d_weights, nn->d_hidden_outputs,
-                                                  nn->d_delta_output, NUM_HIDDEN, NUM_OUTPUTS, LEARNING_RATE);
+                                                 nn->d_delta_output, NUM_HIDDEN, NUM_OUTPUTS, LEARNING_RATE);
 
     // Update output layer biases
     numBlocks = (NUM_OUTPUTS + blockSize - 1) / blockSize;
     update_biases_kernel<<<numBlocks, blockSize>>>(nn->output_layer.d_biases, nn->d_delta_output,
-                                                    NUM_OUTPUTS, LEARNING_RATE);
+                                                   NUM_OUTPUTS, LEARNING_RATE);
 
     // Update hidden layer weights
     gridDim.x = (NUM_INPUTS + blockDim.x - 1) / blockDim.x;
     gridDim.y = (NUM_HIDDEN + blockDim.y - 1) / blockDim.y;
     update_weights_kernel<<<gridDim, blockDim>>>(nn->hidden_layer.d_weights, nn->d_input,
-                                                  nn->d_delta_hidden, NUM_INPUTS, NUM_HIDDEN, LEARNING_RATE);
+                                                 nn->d_delta_hidden, NUM_INPUTS, NUM_HIDDEN, LEARNING_RATE);
 
     // Update hidden layer biases
     numBlocks = (NUM_HIDDEN + blockSize - 1) / blockSize;
     update_biases_kernel<<<numBlocks, blockSize>>>(nn->hidden_layer.d_biases, nn->d_delta_hidden,
-                                                    NUM_HIDDEN, LEARNING_RATE);
+                                                   NUM_HIDDEN, LEARNING_RATE);
 }
 
-double cross_entropy_loss(double predicted[], double expected[], int num_outputs) {
+double cross_entropy_loss(double predicted[], double expected[], int num_outputs)
+{
     double loss = 0.0;
-    for (int i = 0; i < num_outputs; i++) {
+    for (int i = 0; i < num_outputs; i++)
+    {
         loss -= expected[i] * log(predicted[i] + 1e-9);
     }
     return loss;
 }
 
-void train(NeuralNetwork *nn, double **inputs, int *labels, int num_samples) {
+void train(NeuralNetwork *nn, double **inputs, int *labels, int num_samples)
+{
     FILE *loss_file = fopen("./logs/training_loss_cuda.txt", "w");
-    if (!loss_file) {
+    if (!loss_file)
+    {
         printf("Could not open file for writing training loss.\n");
         exit(1);
     }
 
-    for (int epoch = 0; epoch < EPOCHS; epoch++) {
+    for (int epoch = 0; epoch < EPOCHS; epoch++)
+    {
         double total_loss = 0.0;
         clock_t start_time = clock();
 
         // Shuffle the dataset
-        for (int i = 0; i < num_samples; i++) {
+        for (int i = 0; i < num_samples; i++)
+        {
             int j = rand() % num_samples;
             double *temp_image = inputs[i];
             inputs[i] = inputs[j];
@@ -498,11 +552,14 @@ void train(NeuralNetwork *nn, double **inputs, int *labels, int num_samples) {
         }
 
         // Mini-batch training
-        for (int batch_start = 0; batch_start < num_samples; batch_start += BATCH_SIZE) {
+        for (int batch_start = 0; batch_start < num_samples; batch_start += BATCH_SIZE)
+        {
             int batch_end = batch_start + BATCH_SIZE;
-            if (batch_end > num_samples) batch_end = num_samples;
+            if (batch_end > num_samples)
+                batch_end = num_samples;
 
-            for (int idx = batch_start; idx < batch_end; idx++) {
+            for (int idx = batch_start; idx < batch_end; idx++)
+            {
                 double hidden_outputs[NUM_HIDDEN];
                 double output_outputs[NUM_OUTPUTS];
                 double expected_output[NUM_OUTPUTS];
@@ -531,10 +588,12 @@ void train(NeuralNetwork *nn, double **inputs, int *labels, int num_samples) {
     fclose(loss_file);
 }
 
-void test(NeuralNetwork *nn, double **inputs, int *labels, int num_samples) {
+void test(NeuralNetwork *nn, double **inputs, int *labels, int num_samples)
+{
     int correct_predictions = 0;
 
-    for (int idx = 0; idx < num_samples; idx++) {
+    for (int idx = 0; idx < num_samples; idx++)
+    {
         double hidden_outputs[NUM_HIDDEN];
         double output_outputs[NUM_OUTPUTS];
 
@@ -542,14 +601,17 @@ void test(NeuralNetwork *nn, double **inputs, int *labels, int num_samples) {
 
         int predicted_label = 0;
         double max_prob = output_outputs[0];
-        for (int i = 1; i < NUM_OUTPUTS; i++) {
-            if (output_outputs[i] > max_prob) {
+        for (int i = 1; i < NUM_OUTPUTS; i++)
+        {
+            if (output_outputs[i] > max_prob)
+            {
                 max_prob = output_outputs[i];
                 predicted_label = i;
             }
         }
 
-        if (predicted_label == labels[idx]) {
+        if (predicted_label == labels[idx])
+        {
             correct_predictions++;
         }
     }
@@ -558,14 +620,17 @@ void test(NeuralNetwork *nn, double **inputs, int *labels, int num_samples) {
     printf("Test Accuracy: %.2f%%\n", accuracy);
 }
 
-void one_hot_encode(int label, double *vector, int size) {
-    for (int i = 0; i < size; i++) {
+void one_hot_encode(int label, double *vector, int size)
+{
+    for (int i = 0; i < size; i++)
+    {
         vector[i] = 0.0;
     }
     vector[label] = 1.0;
 }
 
-int reverse_int(int i) {
+int reverse_int(int i)
+{
     unsigned char c1, c2, c3, c4;
     c1 = i & 255;
     c2 = (i >> 8) & 255;
@@ -574,9 +639,11 @@ int reverse_int(int i) {
     return ((int)c1 << 24) + ((int)c2 << 16) + ((int)c3 << 8) + c4;
 }
 
-void read_mnist_images(const char *filename, double **images, int num_images) {
+void read_mnist_images(const char *filename, double **images, int num_images)
+{
     FILE *fp = fopen(filename, "rb");
-    if (!fp) {
+    if (!fp)
+    {
         printf("Could not open file %s\n", filename);
         exit(1);
     }
@@ -597,9 +664,11 @@ void read_mnist_images(const char *filename, double **images, int num_images) {
     fread(&cols, sizeof(int), 1, fp);
     cols = reverse_int(cols);
 
-    for (int i = 0; i < num_images; ++i) {
+    for (int i = 0; i < num_images; ++i)
+    {
         images[i] = (double *)malloc(rows * cols * sizeof(double));
-        for (int r = 0; r < rows * cols; ++r) {
+        for (int r = 0; r < rows * cols; ++r)
+        {
             unsigned char pixel = 0;
             fread(&pixel, sizeof(unsigned char), 1, fp);
             images[i][r] = pixel / 255.0;
@@ -608,9 +677,11 @@ void read_mnist_images(const char *filename, double **images, int num_images) {
     fclose(fp);
 }
 
-void read_mnist_labels(const char *filename, int *labels, int num_labels) {
+void read_mnist_labels(const char *filename, int *labels, int num_labels)
+{
     FILE *fp = fopen(filename, "rb");
-    if (!fp) {
+    if (!fp)
+    {
         printf("Could not open file %s\n", filename);
         exit(1);
     }
@@ -623,7 +694,8 @@ void read_mnist_labels(const char *filename, int *labels, int num_labels) {
     fread(&number_of_labels, sizeof(int), 1, fp);
     number_of_labels = reverse_int(number_of_labels);
 
-    for (int i = 0; i < num_labels; ++i) {
+    for (int i = 0; i < num_labels; ++i)
+    {
         unsigned char label = 0;
         fread(&label, sizeof(unsigned char), 1, fp);
         labels[i] = (int)label;

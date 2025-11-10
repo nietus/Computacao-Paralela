@@ -9,3 +9,6 @@ nvcc -O3 -o mnist_mlp_cuda mnist_mlp_cuda.cu
 ./mnist_mlp_cuda         # CUDA
 
 python digit_recognizer.py gpu
+
+valgrind --tool=callgrind ./mnist_mlp
+ncu ./mnist_mlp_cuda

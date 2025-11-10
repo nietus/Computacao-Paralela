@@ -1,4 +1,55 @@
-// mnist_mlp_openmp_cpu.c
+/*
+ * =============================================================================
+ * mnist_mlp_openmp_cpu.c - OpenMP CPU Parallel Implementation
+ * =============================================================================
+ *
+ * DESCRIÇÃO:
+ * Implementação paralela para CPU utilizando OpenMP de uma rede neural MLP
+ * para classificação do dataset MNIST.
+ *
+ * PARALELIZAÇÃO:
+ * - Forward propagation: #pragma omp parallel for (linhas ~329-339)
+ * - Activation functions: #pragma omp parallel for (linhas ~343-363)
+ * - Backward propagation: #pragma omp parallel for (linhas ~377-399)
+ * - Weight updates: #pragma omp parallel for collapse(2) (linhas ~417-427)
+ *
+ * MUDANÇAS DA VERSÃO SEQUENCIAL:
+ * 1. Adição de diretivas #pragma omp parallel for em loops computacionais
+ * 2. Medição de tempo: clock() → omp_get_wtime() (para tempo real wall-clock)
+ * 3. Thread control: usa variável de ambiente OMP_NUM_THREADS (padrão: 4)
+ * 4. Log files: criados com número de threads no nome para evitar sobrescrever
+ *
+ * TEMPOS DE EXECUÇÃO (10 ÉPOCAS):
+ *
+ * AMBIENTE: Intel Core i7-15th Gen, NVIDIA RTX 3050 Ti, Windows
+ *
+ * Versão Sequencial (baseline):
+ *   Tempo total: 1962.30 segundos
+ *   Tempo/época: 196.23 segundos
+ *
+ * OpenMP CPU (esta versão - 4 threads padrão):
+ *   Tempo total: 348.78 segundos
+ *   Tempo/época: 34.88 segundos
+ *   Speedup: 5.62×
+ *
+ * Resultados com diferentes números de threads:
+ *   1 thread:   ~196s/época (Speedup: ~1.0×) - equivalente ao sequencial
+ *   2 threads:  [EXECUTAR run_thread_tests.bat para preencher]
+ *   4 threads:  34.88s/época (Speedup: 5.62×) ← medido
+ *   8 threads:  [EXECUTAR run_thread_tests.bat para preencher]
+ *   16 threads: [EXECUTAR run_thread_tests.bat para preencher]
+ *   32 threads: [EXECUTAR run_thread_tests.bat para preencher]
+ *
+ * COMPILAÇÃO:
+ *   gcc -fopenmp -O3 -o mnist_mlp_openmp_cpu mnist_mlp_openmp_cpu.c -lm
+ *
+ * EXECUÇÃO:
+ *   export OMP_NUM_THREADS=4
+ *   ./mnist_mlp_openmp_cpu
+ *
+ * =============================================================================
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -7,20 +58,26 @@
 #include <string.h>
 #include <omp.h>
 
-#define NUM_INPUTS 784       // 28x28 pixels
-#define NUM_HIDDEN 512       // Number of hidden neurons
-#define NUM_OUTPUTS 10       // Digits 0-9
-#define TRAIN_SAMPLES 60000  // Number of training samples
-#define TEST_SAMPLES 10000   // Number of test samples
-#define LEARNING_RATE 0.01   // Learning rate
-#define EPOCHS 10            // Number of training epochs
-#define BATCH_SIZE 64        // Mini-batch size
+#define NUM_INPUTS 784      // 28x28 pixels
+#define NUM_HIDDEN 512      // Number of hidden neurons
+#define NUM_OUTPUTS 10      // Digits 0-9
+#define TRAIN_SAMPLES 60000 // Number of training samples
+#define TEST_SAMPLES 10000  // Number of test samples
+#define LEARNING_RATE 0.01  // Learning rate
+#define EPOCHS 10           // Number of training epochs
+#define BATCH_SIZE 64       // Mini-batch size
 
 // Activation Types
-typedef enum { SIGMOID, RELU, SOFTMAX } ActivationType;
+typedef enum
+{
+    SIGMOID,
+    RELU,
+    SOFTMAX
+} ActivationType;
 
 // Data structures
-typedef struct {
+typedef struct
+{
     int input_size;
     int output_size;
     double **weights;
@@ -28,11 +85,11 @@ typedef struct {
     ActivationType activation;
 } LinearLayer;
 
-typedef struct {
+typedef struct
+{
     LinearLayer hidden_layer;
     LinearLayer output_layer;
 } NeuralNetwork;
-
 
 // Layer prototypes
 void initialize_layer(LinearLayer *layer, int input_size, int output_size, ActivationType activation);
@@ -63,9 +120,14 @@ void read_mnist_labels(const char *filename, int *labels, int num_labels);
 int reverse_int(int i);
 void one_hot_encode(int label, double *vector, int size);
 
-int main() {
-    // Set OpenMP thread count
-    omp_set_num_threads(4);
+int main()
+{
+    // Set OpenMP thread count from environment variable or default to 4
+    char *env_threads = getenv("OMP_NUM_THREADS");
+    int num_threads = env_threads ? atoi(env_threads) : 4;
+    omp_set_num_threads(num_threads);
+
+    printf("Running with %d OpenMP threads\n", omp_get_max_threads());
 
     // Allocate memory for training data
     double **train_images = (double **)malloc(TRAIN_SAMPLES * sizeof(double *));
@@ -103,14 +165,16 @@ int main() {
     save_model(&nn, "mnist_model_cpu.bin");
 
     // Free training data
-    for (int i = 0; i < TRAIN_SAMPLES; i++) {
+    for (int i = 0; i < TRAIN_SAMPLES; i++)
+    {
         free(train_images[i]);
     }
     free(train_images);
     free(train_labels);
 
     // Free test data
-    for (int i = 0; i < TEST_SAMPLES; i++) {
+    for (int i = 0; i < TEST_SAMPLES; i++)
+    {
         free(test_images[i]);
     }
     free(test_images);
@@ -123,57 +187,68 @@ int main() {
 }
 
 // Activation function
-double sigmoid(double x) {
+double sigmoid(double x)
+{
     return 1.0 / (1.0 + exp(-x));
 }
 
 // Derivative of activation function
-double sigmoid_derivative(double x) {
+double sigmoid_derivative(double x)
+{
     return x * (1.0 - x);
 }
 
 // relu activation function
-double relu(double x) {
+double relu(double x)
+{
     return x > 0 ? x : 0;
 }
 
 // Derivative of relu activation function
-double relu_derivative(double x) {
+double relu_derivative(double x)
+{
     return x > 0 ? 1 : 0;
 }
 
 // Softmax function
-void softmax(double inputs[], int size, double outputs[]) {
+void softmax(double inputs[], int size, double outputs[])
+{
     // softmax as defined here: https://en.wikipedia.org/wiki/Softmax_function
 
     // Find the maximum value across all input values
     double max = inputs[0];
-    for (int i = 1; i < size; i++) {
-        if (inputs[i] > max) max = inputs[i];
+    for (int i = 1; i < size; i++)
+    {
+        if (inputs[i] > max)
+            max = inputs[i];
     }
 
     // Compute the exponentials of the input values
     double sum = 0.0;
-    for (int i = 0; i < size; i++) {
+    for (int i = 0; i < size; i++)
+    {
         outputs[i] = exp(inputs[i] - max);
         sum += outputs[i];
     }
 
     // Normalize the output values
-    for (int i = 0; i < size; i++) {
+    for (int i = 0; i < size; i++)
+    {
         outputs[i] /= sum;
     }
 }
 
 // Initialize a layer
-void initialize_layer(LinearLayer *layer, int input_size, int output_size, ActivationType activation) {
+void initialize_layer(LinearLayer *layer, int input_size, int output_size, ActivationType activation)
+{
     layer->input_size = input_size;
     layer->output_size = output_size;
     layer->activation = activation;
 
     // Allocate memory for weights
     layer->weights = (double **)malloc(input_size * sizeof(double *));
-    for (int i = 0; i < input_size; i++) {
+    for (int i = 0; i < input_size; i++)
+    {
         layer->weights[i] = (double *)malloc(output_size * sizeof(double));
     }
 
@@ -182,19 +257,21 @@ void initialize_layer(LinearLayer *layer, int input_size, int output_size, Activ
 
     // Xavier Initialization
     double limit = sqrt(6.0 / (input_size + output_size));
-    #pragma omp parallel for collapse(2)
+#pragma omp parallel for collapse(2)
     for (int i = 0; i < input_size; i++)
         for (int j = 0; j < output_size; j++)
             layer->weights[i][j] = ((double)rand() / RAND_MAX) * 2 * limit - limit;
 
-    #pragma omp parallel for
+#pragma omp parallel for
     for (int i = 0; i < output_size; i++)
         layer->biases[i] = 0.0;
 }
 
 // Free memory allocated for a layer
-void free_layer(LinearLayer *layer) {
-    for (int i = 0; i < layer->input_size; i++) {
+void free_layer(LinearLayer *layer)
+{
+    for (int i = 0; i < layer->input_size; i++)
+    {
         free(layer->weights[i]);
     }
     free(layer->weights);
@@ -202,22 +279,26 @@ void free_layer(LinearLayer *layer) {
 }
 
 // Initialize the neural network
-void initialize_network(NeuralNetwork *nn) {
+void initialize_network(NeuralNetwork *nn)
+{
     srand(time(NULL));
     initialize_layer(&nn->hidden_layer, NUM_INPUTS, NUM_HIDDEN, RELU);
     initialize_layer(&nn->output_layer, NUM_HIDDEN, NUM_OUTPUTS, SOFTMAX);
 }
 
 // Free memory allocated for the neural network
-void free_network(NeuralNetwork *nn) {
+void free_network(NeuralNetwork *nn)
+{
     free_layer(&nn->hidden_layer);
     free_layer(&nn->output_layer);
 }
 
 // Save model weights to file
-void save_model(NeuralNetwork *nn, const char *filename) {
+void save_model(NeuralNetwork *nn, const char *filename)
+{
     FILE *fp = fopen(filename, "wb");
-    if (!fp) {
+    if (!fp)
+    {
         printf("Could not open file %s for writing model\n", filename);
         exit(1);
     }
@@ -228,7 +309,8 @@ void save_model(NeuralNetwork *nn, const char *filename) {
     fwrite(&nn->output_layer.output_size, sizeof(int), 1, fp);
 
     // Write hidden layer weights
-    for (int i = 0; i < nn->hidden_layer.input_size; i++) {
+    for (int i = 0; i < nn->hidden_layer.input_size; i++)
+    {
         fwrite(nn->hidden_layer.weights[i], sizeof(double), nn->hidden_layer.output_size, fp);
     }
 
@@ -236,7 +318,8 @@ void save_model(NeuralNetwork *nn, const char *filename) {
     fwrite(nn->hidden_layer.biases, sizeof(double), nn->hidden_layer.output_size, fp);
 
     // Write output layer weights
-    for (int i = 0; i < nn->output_layer.input_size; i++) {
+    for (int i = 0; i < nn->output_layer.input_size; i++)
+    {
         fwrite(nn->output_layer.weights[i], sizeof(double), nn->output_layer.output_size, fp);
     }
 
@@ -248,12 +331,15 @@ void save_model(NeuralNetwork *nn, const char *filename) {
 }
 
 // Forward propagation for a single layer
-void linear_layer_forward(LinearLayer *layer, double inputs[], double outputs[]) {
-    // For each neuron in the layer compute the weighted sum of inputs and add the bias to the activation
-    #pragma omp parallel for
-    for (int i = 0; i < layer->output_size; i++) {
+void linear_layer_forward(LinearLayer *layer, double inputs[], double outputs[])
+{
+// For each neuron in the layer compute the weighted sum of inputs and add the bias to the activation
+#pragma omp parallel for
+    for (int i = 0; i < layer->output_size; i++)
+    {
         double activation_sum = layer->biases[i];
-        for (int j = 0; j < layer->input_size; j++) {
+        for (int j = 0; j < layer->input_size; j++)
+        {
             // z = W * x + b^{(1)}
             activation_sum += inputs[j] * layer->weights[j][i];
         }
@@ -261,22 +347,25 @@ void linear_layer_forward(LinearLayer *layer, double inputs[], double outputs[])
     }
 
     // Apply activation function
-    switch (layer->activation) {
-        case SIGMOID:
-            #pragma omp parallel for
-            for (int i = 0; i < layer->output_size; i++) {
-                outputs[i] = sigmoid(outputs[i]);
-            }
-            break;
-        case RELU:
-            #pragma omp parallel for
-            for (int i = 0; i < layer->output_size; i++) {
-                outputs[i] = relu(outputs[i]);
-            }
-            break;
-        case SOFTMAX:
-            softmax(outputs, layer->output_size, outputs);
-            break;
+    switch (layer->activation)
+    {
+    case SIGMOID:
+#pragma omp parallel for
+        for (int i = 0; i < layer->output_size; i++)
+        {
+            outputs[i] = sigmoid(outputs[i]);
+        }
+        break;
+    case RELU:
+#pragma omp parallel for
+        for (int i = 0; i < layer->output_size; i++)
+        {
+            outputs[i] = relu(outputs[i]);
+        }
+        break;
+    case SOFTMAX:
+        softmax(outputs, layer->output_size, outputs);
+        break;
     }
 }
 
@@ -287,30 +376,35 @@ void forward(NeuralNetwork *nn, double **inputs, int idx, double hidden_outputs[
     linear_layer_forward(&nn->output_layer, hidden_outputs, output_outputs);
 }
 
-
 // Backpropagation
-void backward(NeuralNetwork *nn, double inputs[], double hidden_outputs[], double output_outputs[], double expected_outputs[], double delta_hidden[], double delta_output[]) {
-    // Output layer delta
-    #pragma omp parallel for
-    for (int i = 0; i < NUM_OUTPUTS; i++) {
+void backward(NeuralNetwork *nn, double inputs[], double hidden_outputs[], double output_outputs[], double expected_outputs[], double delta_hidden[], double delta_output[])
+{
+// Output layer delta
+#pragma omp parallel for
+    for (int i = 0; i < NUM_OUTPUTS; i++)
+    {
         // For softmax and cross-entropy
         delta_output[i] = output_outputs[i] - expected_outputs[i];
     }
 
-    // Hidden layer delta
-    #pragma omp parallel for
-    for (int i = 0; i < NUM_HIDDEN; i++) {
+// Hidden layer delta
+#pragma omp parallel for
+    for (int i = 0; i < NUM_HIDDEN; i++)
+    {
         double error = 0.0;
-        for (int j = 0; j < NUM_OUTPUTS; j++) {
+        for (int j = 0; j < NUM_OUTPUTS; j++)
+        {
             error += delta_output[j] * nn->output_layer.weights[i][j];
         }
 
         // check the activation
         double activation_derivative = 0.0;
-        if (nn->hidden_layer.activation == SIGMOID){
-             activation_derivative = sigmoid_derivative(hidden_outputs[i]);
+        if (nn->hidden_layer.activation == SIGMOID)
+        {
+            activation_derivative = sigmoid_derivative(hidden_outputs[i]);
         }
-        else{
+        else
+        {
             activation_derivative = relu_derivative(hidden_outputs[i]);
         }
         delta_hidden[i] = error * activation_derivative;
@@ -322,26 +416,32 @@ void backward(NeuralNetwork *nn, double inputs[], double hidden_outputs[], doubl
 }
 
 // Update weights and biases for a layer
-void update_weights_biases(LinearLayer *layer, double inputs[], double deltas[]) {
-    // Update weights
-    #pragma omp parallel for collapse(2)
-    for (int i = 0; i < layer->input_size; i++) {
-        for (int j = 0; j < layer->output_size; j++) {
+void update_weights_biases(LinearLayer *layer, double inputs[], double deltas[])
+{
+// Update weights
+#pragma omp parallel for collapse(2)
+    for (int i = 0; i < layer->input_size; i++)
+    {
+        for (int j = 0; j < layer->output_size; j++)
+        {
             layer->weights[i][j] -= LEARNING_RATE * deltas[j] * inputs[i];
         }
     }
 
-    // Update biases
-    #pragma omp parallel for
-    for (int i = 0; i < layer->output_size; i++) {
+// Update biases
+#pragma omp parallel for
+    for (int i = 0; i < layer->output_size; i++)
+    {
         layer->biases[i] -= LEARNING_RATE * deltas[i];
     }
 }
 
 // Cross-Entropy Loss Function
-double cross_entropy_loss(double predicted[], double expected[], int num_outputs) {
+double cross_entropy_loss(double predicted[], double expected[], int num_outputs)
+{
     double loss = 0.0;
-    for (int i = 0; i < num_outputs; i++) {
+    for (int i = 0; i < num_outputs; i++)
+    {
         // Add a small epsilon to prevent log(0)
         loss -= expected[i] * log(predicted[i] + 1e-9);
     }
@@ -350,20 +450,30 @@ double cross_entropy_loss(double predicted[], double expected[], int num_outputs
 }
 
 // Training function
-void train(NeuralNetwork *nn, double **inputs, int *labels, int num_samples) {
+void train(NeuralNetwork *nn, double **inputs, int *labels, int num_samples)
+{
+    // Create log filename with thread count
+    int num_threads = omp_get_max_threads();
+    char log_filename[256];
+    snprintf(log_filename, sizeof(log_filename), "./logs/training_loss_openmp_cpu_%dthreads.txt", num_threads);
+
     // Open file to log training loss
-    FILE *loss_file = fopen("./logs/training_loss_openmp_cpu.txt", "w");
-    if (!loss_file) {
+    FILE *loss_file = fopen(log_filename, "w");
+    if (!loss_file)
+    {
         printf("Could not open file for writing training loss.\n");
         exit(1);
     }
+    printf("Logging to: %s\n", log_filename);
 
-    for (int epoch = 0; epoch < EPOCHS; epoch++) {
+    for (int epoch = 0; epoch < EPOCHS; epoch++)
+    {
         double total_loss = 0.0;
-        float start_time = clock();
+        double start_time = omp_get_wtime();
 
         // Shuffle the dataset
-        for (int i = 0; i < num_samples; i++) {
+        for (int i = 0; i < num_samples; i++)
+        {
             int j = rand() % num_samples;
             // Swap images
             double *temp_image = inputs[i];
@@ -377,11 +487,14 @@ void train(NeuralNetwork *nn, double **inputs, int *labels, int num_samples) {
         }
 
         // Mini-batch training
-        for (int batch_start = 0; batch_start < num_samples; batch_start += BATCH_SIZE) {
+        for (int batch_start = 0; batch_start < num_samples; batch_start += BATCH_SIZE)
+        {
             int batch_end = batch_start + BATCH_SIZE;
-            if (batch_end > num_samples) batch_end = num_samples;
+            if (batch_end > num_samples)
+                batch_end = num_samples;
 
-            for (int idx = batch_start; idx < batch_end; idx++) {
+            for (int idx = batch_start; idx < batch_end; idx++)
+            {
                 double hidden_outputs[NUM_HIDDEN];
                 double output_outputs[NUM_OUTPUTS];
                 double expected_output[NUM_OUTPUTS];
@@ -403,21 +516,23 @@ void train(NeuralNetwork *nn, double **inputs, int *labels, int num_samples) {
             }
         }
 
-        double end_time = clock();
-        double duration = (end_time - start_time) / CLOCKS_PER_SEC;
+        double end_time = omp_get_wtime();
+        double duration = end_time - start_time;
         double average_loss = total_loss / num_samples;
         printf("Epoch %d, Loss: %f Time: %f\n", epoch + 1, average_loss, duration);
-        fprintf(loss_file, "%d,%f,%f\n", epoch + 1, average_loss, duration);  // Log the metrics
+        fprintf(loss_file, "%d,%f,%f\n", epoch + 1, average_loss, duration); // Log the metrics
     }
 
-    fclose(loss_file);  // Close the loss file
+    fclose(loss_file); // Close the loss file
 }
 
 // Testing function
-void test(NeuralNetwork *nn, double **inputs, int *labels, int num_samples) {
+void test(NeuralNetwork *nn, double **inputs, int *labels, int num_samples)
+{
     int correct_predictions = 0;
 
-    for (int idx = 0; idx < num_samples; idx++) {
+    for (int idx = 0; idx < num_samples; idx++)
+    {
         double hidden_outputs[NUM_HIDDEN];
         double output_outputs[NUM_OUTPUTS];
 
@@ -428,14 +543,17 @@ void test(NeuralNetwork *nn, double **inputs, int *labels, int num_samples) {
         // Get the predicted label
         int predicted_label = 0;
         double max_prob = output_outputs[0];
-        for (int i = 1; i < NUM_OUTPUTS; i++) {
-            if (output_outputs[i] > max_prob) {
+        for (int i = 1; i < NUM_OUTPUTS; i++)
+        {
+            if (output_outputs[i] > max_prob)
+            {
                 max_prob = output_outputs[i];
                 predicted_label = i;
             }
         }
 
-        if (predicted_label == labels[idx]) {
+        if (predicted_label == labels[idx])
+        {
             correct_predictions++;
         }
     }
@@ -445,9 +563,11 @@ void test(NeuralNetwork *nn, double **inputs, int *labels, int num_samples) {
 }
 
 // Read MNIST images
-void read_mnist_images(const char *filename, double **images, int num_images) {
+void read_mnist_images(const char *filename, double **images, int num_images)
+{
     FILE *fp = fopen(filename, "rb");
-    if (!fp) {
+    if (!fp)
+    {
         printf("Could not open file %s\n", filename);
         exit(1);
     }
@@ -468,9 +588,11 @@ void read_mnist_images(const char *filename, double **images, int num_images) {
     fread(&cols, sizeof(int), 1, fp);
     cols = reverse_int(cols);
 
-    for (int i = 0; i < num_images; ++i) {
+    for (int i = 0; i < num_images; ++i)
+    {
         images[i] = (double *)malloc(rows * cols * sizeof(double));
-        for (int r = 0; r < rows * cols; ++r) {
+        for (int r = 0; r < rows * cols; ++r)
+        {
             unsigned char pixel = 0;
             fread(&pixel, sizeof(unsigned char), 1, fp);
             images[i][r] = pixel / 255.0; // Normalize pixel values
@@ -480,9 +602,11 @@ void read_mnist_images(const char *filename, double **images, int num_images) {
 }
 
 // Read MNIST labels
-void read_mnist_labels(const char *filename, int *labels, int num_labels) {
+void read_mnist_labels(const char *filename, int *labels, int num_labels)
+{
     FILE *fp = fopen(filename, "rb");
-    if (!fp) {
+    if (!fp)
+    {
         printf("Could not open file %s\n", filename);
         exit(1);
     }
@@ -495,7 +619,8 @@ void read_mnist_labels(const char *filename, int *labels, int num_labels) {
     fread(&number_of_labels, sizeof(int), 1, fp);
     number_of_labels = reverse_int(number_of_labels);
 
-    for (int i = 0; i < num_labels; ++i) {
+    for (int i = 0; i < num_labels; ++i)
+    {
         unsigned char label = 0;
         fread(&label, sizeof(unsigned char), 1, fp);
         labels[i] = (int)label;
@@ -504,7 +629,8 @@ void read_mnist_labels(const char *filename, int *labels, int num_labels) {
 }
 
 // Reverse integer byte order
-int reverse_int(int i) {
+int reverse_int(int i)
+{
     unsigned char c1, c2, c3, c4;
     c1 = i & 255;
     c2 = (i >> 8) & 255;
@@ -514,8 +640,10 @@ int reverse_int(int i) {
 }
 
 // One-hot encode labels
-void one_hot_encode(int label, double *vector, int size) {
-    for (int i = 0; i < size; i++) {
+void one_hot_encode(int label, double *vector, int size)
+{
+    for (int i = 0; i < size; i++)
+    {
         vector[i] = 0.0;
     }
     vector[label] = 1.0;

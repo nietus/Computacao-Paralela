@@ -32,19 +32,20 @@
  * AMBIENTE: Intel Core i7-15th Gen, NVIDIA RTX 3050 Ti, Windows
  *
  * Versão Sequencial (baseline):
- *   Tempo total: 1962.30 segundos
- *   Tempo/época: 196.23 segundos
+ *   Tempo total: 337.11 segundos
+ *   Tempo/época: 33.71 segundos
  *
  * CUDA (esta versão):
  *   Tempo total: 111.48 segundos (10 épocas)
  *   Tempo/época: 11.15 segundos
- *   Speedup: 17.60×
+ *   Speedup: 3.02×
  *
  * NOTA: Melhor performance devido a:
  * - Milhares de threads paralelas (vs 4-8 CPU cores)
  * - Memória GPU de alta velocidade (~900 GB/s vs ~50 GB/s CPU)
- * - Kernels otimizados sem overhead de offloading
- * - Computação massivamente paralela em matriz operations
+ * - Kernels CUDA nativos sem overhead de offloading
+ * - Computação massivamente paralela em operações de matriz
+ * - cudaMallocManaged para transferências otimizadas CPU↔GPU
  *
  * COMPILAÇÃO:
  *   nvcc -O3 -o mnist_mlp_cuda mnist_mlp_cuda.cu

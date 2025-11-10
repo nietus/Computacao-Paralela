@@ -24,21 +24,33 @@
  * AMBIENTE: Intel Core i7-15th Gen, NVIDIA RTX 3050 Ti, Windows
  *
  * Versão Sequencial (baseline):
- *   Tempo total: 1962.30 segundos
- *   Tempo/época: 196.23 segundos
+ *   Tempo total: 337.11 segundos
+ *   Tempo/época: 33.71 segundos
  *
  * OpenMP CPU (esta versão - 4 threads padrão):
- *   Tempo total: 348.78 segundos
- *   Tempo/época: 34.88 segundos
- *   Speedup: 5.62×
+ *   Tempo total: 354.36 segundos
+ *   Tempo/época: 35.44 segundos
+ *   Speedup: 0.95× (5% mais lento que sequential!)
  *
- * Resultados com diferentes números de threads:
- *   1 thread:   ~196s/época (Speedup: ~1.0×) - equivalente ao sequencial
- *   2 threads:  [EXECUTAR run_thread_tests.bat para preencher]
- *   4 threads:  34.88s/época (Speedup: 5.62×) ← medido
- *   8 threads:  [EXECUTAR run_thread_tests.bat para preencher]
- *   16 threads: [EXECUTAR run_thread_tests.bat para preencher]
- *   32 threads: [EXECUTAR run_thread_tests.bat para preencher]
+ * NOTA: Esta versão OpenMP CPU apresentou desempenho PIOR que a versão
+ * sequencial com 4 threads. Possíveis causas:
+ * - Overhead de criação/sincronização de threads
+ * - Contenção de memória e cache thrashing
+ * - Problema não possui paralelismo suficiente para 4 threads
+ * - False sharing entre threads
+ *
+ * Resultados com diferentes números de threads (vs sequential baseline 33.71s):
+ *   1 thread:    42.79s/época (Speedup: 0.79×) - 27% mais lento!
+ *   2 threads:   37.73s/época (Speedup: 0.89×) - 12% mais lento
+ *   4 threads:   35.44s/época (Speedup: 0.95×) - 5% mais lento
+ *   8 threads:   49.94s/época (Speedup: 0.68×) - 48% mais lento!
+ *   16 threads:  71.44s/época (Speedup: 0.47×) - 112% mais lento!!
+ *   32 threads: 102.83s/época (Speedup: 0.33×) - 205% mais lento!!!
+ *
+ * ANÁLISE: NEGATIVE SCALING - Performance PIORA com mais threads!
+ * - 1-4 threads: Overhead moderado (~5-27% perda)
+ * - 8+ threads: Colapso de performance devido a contenção massiva
+ * - Causa raiz: Problema possui paralelismo insuficiente + overhead domina
  *
  * COMPILAÇÃO:
  *   gcc -fopenmp -O3 -o mnist_mlp_openmp_cpu mnist_mlp_openmp_cpu.c -lm

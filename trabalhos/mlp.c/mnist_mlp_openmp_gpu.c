@@ -36,18 +36,18 @@
  * AMBIENTE: Intel Core i7-15th Gen, NVIDIA RTX 3050 Ti, Windows
  *
  * Versão Sequencial (baseline):
- *   Tempo total: 1962.30 segundos
- *   Tempo/época: 196.23 segundos
+ *   Tempo total: 337.11 segundos
+ *   Tempo/época: 33.71 segundos
  *
  * OpenMP GPU (esta versão):
- *   Tempo total: 1273.11 segundos
- *   Tempo/época: 127.31 segundos
- *   Speedup: 1.54×
+ *   Tempo total: 1273.21 segundos
+ *   Tempo/época: 127.32 segundos
+ *   Speedup: 0.26× (quase 4× MAIS LENTO que sequential!)
  *
- * NOTA: O speedup pode ser limitado devido a:
- * - Overhead de lançamento de kernels GPU (~10-100μs por launch)
- * - Overhead de transferência de dados PCIe
- * - Problema relativamente pequeno (512 neurônios)
+ * NOTA: O desempenho muito inferior se deve a:
+ * - Overhead massivo de lançamento de kernels GPU (~10-100μs por launch)
+ * - Cada batch (64 amostras) causa múltiplas transferências PCIe
+ * - OpenMP target offload tem overhead maior que CUDA puro
  * Esta implementação demonstra o conceito de offloading OpenMP.
  *
  * COMPILAÇÃO:
@@ -92,7 +92,7 @@ typedef struct
 {
     int input_size;
     int output_size;
-    double *weights;  // Flattened 1D array: weights[i * output_size + j]
+    double *weights; // Flattened 1D array: weights[i * output_size + j]
     double *biases;
     ActivationType activation;
 } LinearLayer;
@@ -334,8 +334,8 @@ void linear_layer_forward_gpu(LinearLayer *layer, double inputs[], double output
     double *biases = layer->biases;
     int activation = layer->activation;
 
-    // GPU offloading for matrix multiplication (most compute-intensive part)
-    #pragma omp target teams distribute parallel for map(to: inputs[0:input_size], weights[0:input_size*output_size], biases[0:output_size]) map(from: outputs[0:output_size])
+// GPU offloading for matrix multiplication (most compute-intensive part)
+#pragma omp target teams distribute parallel for map(to : inputs[0 : input_size], weights[0 : input_size * output_size], biases[0 : output_size]) map(from : outputs[0 : output_size])
     for (int i = 0; i < output_size; i++)
     {
         double activation_sum = biases[i];
@@ -350,7 +350,7 @@ void linear_layer_forward_gpu(LinearLayer *layer, double inputs[], double output
     // Apply activation function on CPU (small operation)
     if (activation == SIGMOID)
     {
-        #pragma omp parallel for
+#pragma omp parallel for
         for (int i = 0; i < output_size; i++)
         {
             outputs[i] = 1.0 / (1.0 + exp(-outputs[i]));
@@ -358,7 +358,7 @@ void linear_layer_forward_gpu(LinearLayer *layer, double inputs[], double output
     }
     else if (activation == RELU)
     {
-        #pragma omp parallel for
+#pragma omp parallel for
         for (int i = 0; i < output_size; i++)
         {
             outputs[i] = outputs[i] > 0 ? outputs[i] : 0;
@@ -379,8 +379,8 @@ void linear_layer_forward(LinearLayer *layer, double inputs[], double outputs[])
     double *biases = layer->biases;
     int activation = layer->activation;
 
-    // For each neuron in the layer compute the weighted sum of inputs and add the bias to the activation
-    #pragma omp parallel for
+// For each neuron in the layer compute the weighted sum of inputs and add the bias to the activation
+#pragma omp parallel for
     for (int i = 0; i < output_size; i++)
     {
         double activation_sum = biases[i];
@@ -395,7 +395,7 @@ void linear_layer_forward(LinearLayer *layer, double inputs[], double outputs[])
     // Apply activation function
     if (activation == SIGMOID)
     {
-        #pragma omp parallel for
+#pragma omp parallel for
         for (int i = 0; i < output_size; i++)
         {
             outputs[i] = 1.0 / (1.0 + exp(-outputs[i]));
@@ -403,7 +403,7 @@ void linear_layer_forward(LinearLayer *layer, double inputs[], double outputs[])
     }
     else if (activation == RELU)
     {
-        #pragma omp parallel for
+#pragma omp parallel for
         for (int i = 0; i < output_size; i++)
         {
             outputs[i] = outputs[i] > 0 ? outputs[i] : 0;
@@ -427,8 +427,8 @@ void forward(NeuralNetwork *nn, double **inputs, int idx, double hidden_outputs[
 // Backpropagation
 void backward(NeuralNetwork *nn, double inputs[], double hidden_outputs[], double output_outputs[], double expected_outputs[], double delta_hidden[], double delta_output[])
 {
-    // Output layer delta
-    #pragma omp parallel for
+// Output layer delta
+#pragma omp parallel for
     for (int i = 0; i < NUM_OUTPUTS; i++)
     {
         // For softmax and cross-entropy
@@ -440,7 +440,7 @@ void backward(NeuralNetwork *nn, double inputs[], double hidden_outputs[], doubl
     double *output_weights = nn->output_layer.weights;
     int output_size = NUM_OUTPUTS;
 
-    #pragma omp parallel for
+#pragma omp parallel for
     for (int i = 0; i < NUM_HIDDEN; i++)
     {
         double error = 0.0;
@@ -476,8 +476,8 @@ void update_weights_biases(LinearLayer *layer, double inputs[], double deltas[])
     double *weights = layer->weights;
     double *biases = layer->biases;
 
-    // Update weights
-    #pragma omp parallel for collapse(2)
+// Update weights
+#pragma omp parallel for collapse(2)
     for (int i = 0; i < input_size; i++)
     {
         for (int j = 0; j < output_size; j++)
@@ -487,8 +487,8 @@ void update_weights_biases(LinearLayer *layer, double inputs[], double deltas[])
         }
     }
 
-    // Update biases
-    #pragma omp parallel for
+// Update biases
+#pragma omp parallel for
     for (int i = 0; i < output_size; i++)
     {
         biases[i] -= LEARNING_RATE * deltas[i];
@@ -522,7 +522,7 @@ void train(NeuralNetwork *nn, double **inputs, int *labels, int num_samples)
     for (int epoch = 0; epoch < EPOCHS; epoch++)
     {
         double total_loss = 0.0;
-        double start_time = omp_get_wtime();  // Use wall-clock time instead of CPU time
+        double start_time = omp_get_wtime(); // Use wall-clock time instead of CPU time
 
         // Shuffle the dataset
         for (int i = 0; i < num_samples; i++)
@@ -570,7 +570,7 @@ void train(NeuralNetwork *nn, double **inputs, int *labels, int num_samples)
         }
 
         double end_time = omp_get_wtime();
-        double duration = end_time - start_time;  // Already in seconds
+        double duration = end_time - start_time; // Already in seconds
         double average_loss = total_loss / num_samples;
         printf("Epoch %d, Loss: %f Time: %f\n", epoch + 1, average_loss, duration);
         fprintf(loss_file, "%d,%f,%f\n", epoch + 1, average_loss, duration); // Log the metrics

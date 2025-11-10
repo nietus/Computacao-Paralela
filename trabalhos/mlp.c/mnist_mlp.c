@@ -1,13 +1,46 @@
-// mnist_mlp.c
+/*
+ * =============================================================================
+ * mnist_mlp.c - Sequential CPU Implementation (Baseline)
+ * =============================================================================
+ *
+ * DESCRIÇÃO:
+ * Implementação sequencial de uma rede neural MLP para classificação do
+ * dataset MNIST. Serve como baseline para comparação com versões paralelas.
+ *
+ * ARQUITETURA:
+ * - Camada de entrada: 784 neurônios (28×28 pixels)
+ * - Camada oculta: 512 neurônios (ReLU)
+ * - Camada de saída: 10 neurônios (Softmax)
+ * - Taxa de aprendizado: 0.01
+ * - Batch size: 64 amostras
+ *
+ * TEMPOS DE EXECUÇÃO (10 ÉPOCAS):
+ *
+ * AMBIENTE: Intel Core i7-15th Gen, NVIDIA RTX 3050 Ti, Windows
+ *
+ * Sequential CPU (baseline - esta versão):
+ *   Tempo total: 337.11 segundos
+ *   Tempo/época: 33.71 segundos
+ *   Acurácia final: ~97.4%
+ *
+ * COMPILAÇÃO:
+ *   gcc -O3 -o mnist_mlp mnist_mlp.c -lm
+ *
+ * EXECUÇÃO:
+ *   ./mnist_mlp
+ *
+ * FONTE ORIGINAL:
+ * Extraido de https://github.com/djbyrne/mlp.c
+ * Aumentado a camada oculta de 128 para 512 neurônios
+ * =============================================================================
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <time.h>
 #include <stdint.h>
 #include <string.h>
-
-// Extraido de https://github.com/djbyrne/mlp.c
-// Aumentado a camada oculta de 128 para 512 neurônios
 
 #define NUM_INPUTS 784      // 28x28 pixels
 #define NUM_HIDDEN 512      // Number of hidden neurons

@@ -100,13 +100,6 @@ gcc -fopenmp -O3 -o mnist_mlp_openmp_gpu mnist_mlp_openmp_gpu.c -lm
 # Versão CUDA
 nvcc -O3 -o mnist_mlp_cuda mnist_mlp_cuda.cu
 
-COMPILAÇÃO COM MAKEFILE:
-make all          # Compila todas as versões
-make sequential   # Compila apenas versão sequencial
-make openmp_cpu   # Compila apenas OpenMP CPU
-make openmp_gpu   # Compila apenas OpenMP GPU
-make cuda         # Compila apenas CUDA
-
 =============================================================================
 5. INSTRUÇÕES DE EXECUÇÃO
 =============================================================================
@@ -296,7 +289,7 @@ MUDANÇA 4 - Sincronização:
 =============================================================================
 
 A versão sequencial base foi adaptada de:
-https://github.com/nietus/Computacao-Paralela
+https://github.com/djbyrne/mlp.c/blob/main/mnist_mlp.c
 
 Modificações incluem:
 - Aumento da camada oculta (128 → 512 neurônios)
